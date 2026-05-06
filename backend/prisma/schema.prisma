@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  nombre        String
+  email         String   @unique
+  password_hash String
+  role          String   @default("organizador")
+  created_at    DateTime @default(now())
+
+  tournaments Tournament[]
+}
+
+model Tournament {
+  id             String   @id @default(uuid())
+  organizador_id String?
+  nombre         String
+  slug           String   @unique
+  fecha_inicio   String
+  timezone       String   @default("America/Guayaquil")
+  status         String   @default("borrador")
+  created_at     DateTime @default(now())
+
+  organizador       User?             @relation(fields: [organizador_id], references: [id])
+  categories        Category[]
+  fields            Field[]
+  tournament_days   TournamentDay[]
+  schedule_versions ScheduleVersion[]
+}
+
+model Category {
+  id            String     @id @default(uuid())
+  tournament_id String
+  nombre        String
+  sub           Int
+  genero        String
+  modalidad     String     @default("futbol")
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  teams      Team[]
+}
+
+model Team {
+  id          String @id @default(uuid())
+  category_id String
+  nombre      String
+
+  category         Category        @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  home_matches     Match[]         @relation("HomeTeam")
+  away_matches     Match[]         @relation("AwayTeam")
+}
+
+model Field {
+  id            String @id @default(uuid())
+  tournament_id String
+  nombre        String
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  matches    Match[]
+}
+
+model TournamentDay {
+  id            String   @id @default(uuid())
+  tournament_id String
+  fecha         String
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+
+  @@unique([tournament_id, fecha])
+}
+
+model ScheduleVersion {
+  id            String   @id @default(uuid())
+  tournament_id String
+  version       Int      @default(1)
+  status        String   @default("borrador")
+  generated_at  DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  matches    Match[]
+}
+
+model Match {
+  id                  String @id @default(uuid())
+  schedule_version_id String
+  field_id            String
+  home_team_id        String
+  away_team_id        String
+  fecha               String
+  hora_inicio         String
+  hora_fin            String
+  categoria_id        String
+  status              String @default("pendiente")
+  home_score          Int?
+  away_score          Int?
+
+  schedule_version ScheduleVersion @relation(fields: [schedule_version_id], references: [id], onDelete: Cascade)
+  field            Field           @relation(fields: [field_id], references: [id])
+  home_team        Team            @relation("HomeTeam", fields: [home_team_id], references: [id])
+  away_team        Team            @relation("AwayTeam", fields: [away_team_id], references: [id])
+}
