@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -38,6 +38,167 @@ function nombreDia(fecha: string) {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+}
+
+// ─── Buscador de equipos ──────────────────────────────────────────────────────
+function BuscarEquipo({ matches, cats }: { matches: Match[]; cats: string[] }) {
+  const [query, setQuery] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const [equipoSel, setEquipoSel] = useState<{ id: string; nombre: string; cat: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Lista única de equipos
+  const equipos = [
+    ...new Map(
+      matches.flatMap((m) => [
+        { id: m.home_team.id, nombre: m.home_team.nombre, cat: m.home_team.category.nombre },
+        { id: m.away_team.id, nombre: m.away_team.nombre, cat: m.away_team.category.nombre },
+      ]).map((e) => [e.id, e])
+    ).values(),
+  ].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const sugerencias = query.trim().length >= 1
+    ? equipos.filter((e) => e.nombre.toLowerCase().includes(query.toLowerCase()))
+    : [];
+
+  function seleccionar(eq: typeof equipoSel) {
+    setEquipoSel(eq);
+    setQuery(eq?.nombre ?? '');
+    setAbierto(false);
+  }
+
+  function limpiar() {
+    setEquipoSel(null);
+    setQuery('');
+    inputRef.current?.focus();
+  }
+
+  const partidosEquipo = equipoSel
+    ? matches
+        .filter((m) => m.home_team.id === equipoSel.id || m.away_team.id === equipoSel.id)
+        .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora_inicio.localeCompare(b.hora_inicio))
+    : [];
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      {/* Input con autocompletado */}
+      <div style={{ position: 'relative', maxWidth: 380 }}>
+        <div style={{ position: 'relative' }}>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setAbierto(true); setEquipoSel(null); }}
+            onFocus={() => setAbierto(true)}
+            onBlur={() => setTimeout(() => setAbierto(false), 150)}
+            placeholder="Buscar equipo..."
+            style={{
+              width: '100%', padding: '0.5rem 2.5rem 0.5rem 0.9rem',
+              border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14,
+              outline: 'none', boxSizing: 'border-box',
+              borderColor: equipoSel ? '#2563eb' : '#d1d5db',
+            }}
+          />
+          {query && (
+            <button onClick={limpiar} style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 18, lineHeight: 1,
+            }}>×</button>
+          )}
+        </div>
+
+        {/* Dropdown sugerencias */}
+        {abierto && sugerencias.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+            background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', marginTop: 4, overflow: 'hidden',
+          }}>
+            {sugerencias.slice(0, 8).map((eq) => (
+              <button key={eq.id} onMouseDown={() => seleccionar(eq)} style={{
+                width: '100%', padding: '0.5rem 0.9rem', textAlign: 'left',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f9fafb')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              >
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{eq.nombre}</span>
+                <span style={{
+                  fontSize: 11, color: '#fff', fontWeight: 600, padding: '1px 8px', borderRadius: 20,
+                  background: colorPorCategoria(eq.cat, cats),
+                }}>{eq.cat}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Resultados del equipo seleccionado */}
+      {equipoSel && (
+        <div style={{
+          marginTop: '0.75rem', border: '1px solid #dbeafe', borderRadius: 10,
+          background: '#fff', overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            background: '#eff6ff', padding: '0.65rem 1rem',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <div>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{equipoSel.nombre}</span>
+              <span style={{
+                marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#fff',
+                background: colorPorCategoria(equipoSel.cat, cats),
+                padding: '1px 8px', borderRadius: 20,
+              }}>{equipoSel.cat}</span>
+            </div>
+            <span style={{ fontSize: 13, color: '#6b7280' }}>{partidosEquipo.length} partidos</span>
+          </div>
+
+          {/* Lista de partidos */}
+          {partidosEquipo.length === 0 ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+              Sin partidos asignados
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f9fafb' }}>
+                  {['Fecha', 'Hora', 'Cancha', 'Rival'].map((h) => (
+                    <th key={h} style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {partidosEquipo.map((m, i) => {
+                  const esLocal = m.home_team.id === equipoSel.id;
+                  const rival = esLocal ? m.away_team.nombre : m.home_team.nombre;
+                  return (
+                    <tr key={m.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                      <td style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                        {new Date(m.fecha + 'T12:00:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </td>
+                      <td style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #f3f4f6', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {m.hora_inicio} – {m.hora_fin}
+                      </td>
+                      <td style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                        {m.field.nombre}
+                      </td>
+                      <td style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid #f3f4f6' }}>
+                        <span style={{ color: '#6b7280', fontSize: 11, marginRight: 4 }}>{esLocal ? 'vs' : 'vs'}</span>
+                        <span style={{ fontWeight: 600 }}>{rival}</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, color: '#9ca3af' }}>{esLocal ? '(local)' : '(visita)'}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Vista tabla: Hora × Cancha ───────────────────────────────────────────────
@@ -466,6 +627,9 @@ export default function TorneoCalendario() {
           {alerta.msg}
         </div>
       )}
+
+      {/* Buscador de equipos */}
+      <BuscarEquipo matches={matches} cats={cats} />
 
       {/* Leyenda + selector de vista */}
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
