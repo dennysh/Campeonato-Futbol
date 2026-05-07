@@ -176,6 +176,111 @@ function VistaTabla({
   );
 }
 
+// ─── Vista programa: todos los días → columnas por cancha ────────────────────
+function VistaProgramaDias({ matches, cats }: { matches: Match[]; cats: string[] }) {
+  const dias = [...new Set(matches.map((m) => m.fecha))].sort();
+
+  if (dias.length === 0) {
+    return <div style={{ padding: '2rem', textAlign: 'center', color: '#9ca3af' }}>No hay partidos programados.</div>;
+  }
+
+  return (
+    <div style={{ padding: '1.25rem' }}>
+      {dias.map((dia) => {
+        const matchesDia = matches.filter((m) => m.fecha === dia);
+        const canchasDelDia = [
+          ...new Map(
+            [...matchesDia]
+              .sort((a, b) => a.field.nombre.localeCompare(b.field.nombre))
+              .map((m) => [m.field.id, m.field])
+          ).values(),
+        ];
+
+        return (
+          <div key={dia} style={{ marginBottom: '2.5rem' }}>
+            {/* Cabecera del día */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.75rem',
+              borderLeft: '4px solid #2563eb', paddingLeft: '0.75rem', marginBottom: '1rem',
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 16, textTransform: 'capitalize' }}>
+                {nombreDia(dia)}
+              </span>
+              <span style={{
+                fontSize: 12, background: '#dbeafe', color: '#1d4ed8',
+                padding: '2px 10px', borderRadius: 20, fontWeight: 600,
+              }}>
+                {matchesDia.length} partidos
+              </span>
+            </div>
+
+            {/* Grid de canchas */}
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${canchasDelDia.length}, minmax(220px, 1fr))`,
+                gap: '0.75rem',
+              }}>
+                {canchasDelDia.map((cancha) => {
+                  const matchesCancha = matchesDia
+                    .filter((m) => m.field_id === cancha.id)
+                    .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+
+                  return (
+                    <div key={cancha.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                      {/* Header cancha */}
+                      <div style={{
+                        background: '#1e3a8a', color: '#fff',
+                        padding: '0.5rem 0.75rem', fontWeight: 700,
+                        fontSize: 13, textAlign: 'center', letterSpacing: '0.05em',
+                      }}>
+                        {cancha.nombre.toUpperCase()}
+                      </div>
+
+                      {/* Partidos */}
+                      {matchesCancha.length === 0 ? (
+                        <div style={{ padding: '1rem', textAlign: 'center', color: '#d1d5db', fontSize: 13 }}>
+                          Sin partidos
+                        </div>
+                      ) : (
+                        matchesCancha.map((m, i) => {
+                          const color = colorPorCategoria(m.home_team.category.nombre, cats);
+                          return (
+                            <div key={m.id} style={{
+                              padding: '0.6rem 0.75rem',
+                              background: i % 2 === 0 ? '#fff' : '#f9fafb',
+                              borderBottom: '1px solid #f3f4f6',
+                              borderLeft: `3px solid ${color}`,
+                            }}>
+                              <div style={{ fontWeight: 800, fontSize: 13, color: '#111827', marginBottom: 2 }}>
+                                {m.hora_inicio} – {m.hora_fin}
+                              </div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 3, textTransform: 'uppercase' }}>
+                                {m.home_team.category.nombre}
+                              </div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: '#1f2937' }}>
+                                {m.home_team.nombre}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#9ca3af', margin: '1px 0', textAlign: 'center' }}>vs</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: '#1f2937' }}>
+                                {m.away_team.nombre}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function TorneoCalendario() {
   const { id } = useParams<{ id: string }>();
@@ -184,7 +289,7 @@ export default function TorneoCalendario() {
   const [alerta, setAlerta] = useState<{ tipo: 'error' | 'ok'; msg: string } | null>(null);
   const [publicando, setPublicando] = useState(false);
   const [copiado, setCopiado] = useState(false);
-  const [vista, setVista] = useState<'tabla' | 'calendario'>('tabla');
+  const [vista, setVista] = useState<'tabla' | 'programa' | 'calendario'>('tabla');
   const [fechaActiva, setFechaActiva] = useState('');
   const [matchDetalle, setMatchDetalle] = useState<Match | null>(null);
   const [confirmarConflicto, setConfirmarConflicto] = useState<{
@@ -351,14 +456,18 @@ export default function TorneoCalendario() {
           ))}
         </div>
         <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 8, padding: 3, gap: 2 }}>
-          {(['tabla', 'calendario'] as const).map((v) => (
-            <button key={v} onClick={() => setVista(v)} style={{
+          {([
+            { key: 'tabla', label: 'Por jornada' },
+            { key: 'programa', label: 'Programa' },
+            { key: 'calendario', label: 'Calendario' },
+          ] as const).map(({ key, label }) => (
+            <button key={key} onClick={() => setVista(key)} style={{
               padding: '0.35rem 0.9rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: vista === v ? '#fff' : 'transparent',
-              color: vista === v ? '#111827' : '#6b7280',
-              boxShadow: vista === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              background: vista === key ? '#fff' : 'transparent',
+              color: vista === key ? '#111827' : '#6b7280',
+              boxShadow: vista === key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
             }}>
-              {v === 'tabla' ? 'Por jornada' : 'Calendario'}
+              {label}
             </button>
           ))}
         </div>
@@ -377,6 +486,8 @@ export default function TorneoCalendario() {
               matchDetalle={matchDetalle}
               setMatchDetalle={setMatchDetalle}
             />
+          ) : vista === 'programa' ? (
+            <VistaProgramaDias matches={matches} cats={cats} />
           ) : (
             <FullCalendar
               plugins={[timeGridPlugin, interactionPlugin]}
