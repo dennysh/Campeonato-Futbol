@@ -64,6 +64,48 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
     [categorias, config_canchas.num_canchas, config_horario]
   );
 
+  const totalPartidos = useMemo(
+    () => categorias.reduce((s, c) => s + (c.num_equipos * (c.num_equipos - 1)) / 2, 0),
+    [categorias]
+  );
+
+  // Capacity of a day accounting for per-cancha overrides
+  function capacidadDia(dia: DiaHabilitado): number {
+    return config_canchas.canchas
+      .filter((c) => c.categorias_ids.length > 0)
+      .reduce((s, cancha) => {
+        const cfg = dia.canchas_config?.find((c) => c.cancha_id === cancha.id);
+        if (cfg && !cfg.activa) return s;
+        return s + slotsEntre(
+          cfg?.hora_inicio ?? config_horario.hora_inicio,
+          cfg?.hora_fin    ?? config_horario.hora_fin,
+        );
+      }, 0);
+  }
+
+  const capacidadActualTotal = useMemo(
+    () => dias_habilitados.reduce((s, d) => s + capacidadDia(d), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dias_habilitados, config_canchas, config_horario]
+  );
+
+  // After changing per-day hours, append more S/D days until capacity covers all matches
+  function completarDiasHastaCapacidad(dias: DiaHabilitado[]): DiaHabilitado[] {
+    if (totalPartidos === 0) return dias;
+    const result = [...dias];
+    const fechasUsadas = new Set(result.map((d) => d.fecha));
+    const cap = () => result.reduce((s, d) => s + capacidadDia(d), 0);
+    for (const f of dias_base) {
+      if (cap() >= totalPartidos) break;
+      if (esFds(f) && !fechasUsadas.has(f)) {
+        result.push({ fecha: f });
+        fechasUsadas.add(f);
+        result.sort((a, b) => a.fecha.localeCompare(b.fecha));
+      }
+    }
+    return result;
+  }
+
   // ── Sincronizar S/D al mínimo necesario cada vez que cambia dias_necesarios ──
   useEffect(() => {
     if (!fecha_inicio || dias_necesarios === 0 || dias_base.length === 0) return;
@@ -119,16 +161,16 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
   }
 
   function actualizarCanchaEnDia(fecha: string, canchaId: number, cambios: Partial<CanchaConfigDia>) {
-    setDiasHabilitados(dias_habilitados.map((d) => {
+    const newDias = dias_habilitados.map((d) => {
       if (d.fecha !== fecha) return d;
       const prevConfig = getCanchaConfig(d, canchaId);
       const nueva: CanchaConfigDia = { ...prevConfig, ...cambios };
       const otrasConfigs = (d.canchas_config ?? []).filter((c) => c.cancha_id !== canchaId);
-      // Si la cancha queda igual al global, no guardar override
       const esDefault = nueva.activa && nueva.hora_inicio === undefined && nueva.hora_fin === undefined;
       const nuevasConfigs = esDefault ? otrasConfigs : [...otrasConfigs, nueva];
       return { ...d, canchas_config: nuevasConfigs.length > 0 ? nuevasConfigs : undefined };
-    }));
+    });
+    setDiasHabilitados(completarDiasHastaCapacidad(newDias));
   }
 
   function resetearDia(fecha: string) {
@@ -149,7 +191,7 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
 
   const diasFds = dias_habilitados.filter((d) => esFds(d.fecha)).length;
   const diasExtra = dias_habilitados.length - diasFds;
-  const suficiente = dias_habilitados.length >= dias_necesarios;
+  const suficiente = capacidadActualTotal >= totalPartidos;
   const diaEditandoData = dias_habilitados.find((d) => d.fecha === diaEditando);
 
   const totalPartidosPorDia = config_canchas.num_canchas * slotsEntre(config_horario.hora_inicio, config_horario.hora_fin);
@@ -216,7 +258,9 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
             </div>
             <div style={{ fontSize: 13, color: '#6b7280' }}>S/D: <strong>{diasFds}</strong> · Extras: <strong>{diasExtra}</strong></div>
             <div style={{ fontSize: 13, fontWeight: 500, color: suficiente ? '#15803d' : '#92400e' }}>
-              {suficiente ? `Suficiente (estimado ${dias_necesarios} días)` : `Faltan ${dias_necesarios - dias_habilitados.length} días más`}
+              {suficiente
+                ? `Suficiente — ${capacidadActualTotal} slots / ${totalPartidos} partidos`
+                : `Insuficiente — ${capacidadActualTotal} / ${totalPartidos} slots (faltan días)`}
             </div>
           </div>
 
