@@ -138,10 +138,15 @@ export function generarCronograma(input: ScheduleInput): ScheduleOutput {
     pares_por_categoria.set(categoria.id, pares);
   }
 
-  // Aplanar todos los pares en una lista unica para asignar
+  // Intercalar pares entre categorías para distribuir la carga uniformemente
+  // (en lugar de agotar una categoría entera antes de pasar a la siguiente)
   const todos_los_pares: ParDePartido[] = [];
-  for (const pares of pares_por_categoria.values()) {
-    todos_los_pares.push(...pares);
+  const cat_pares_list = Array.from(pares_por_categoria.values());
+  const max_rondas = cat_pares_list.reduce((m, p) => Math.max(m, p.length), 0);
+  for (let i = 0; i < max_rondas; i++) {
+    for (const pares of cat_pares_list) {
+      if (i < pares.length) todos_los_pares.push(pares[i]);
+    }
   }
 
   // Intentar asignar cada par
@@ -174,8 +179,21 @@ export function generarCronograma(input: ScheduleInput): ScheduleOutput {
       continue;
     }
 
+    // Ordenar dias por carga del par: preferir dias donde estos equipos tienen menos partidos ya
+    const dias_para_par = [...dias_ordenados].sort((a, b) => {
+      const carga = (dia: string) => partidos_asignados.filter((p) =>
+        p.fecha === dia && (
+          p.equipo_local_id === par.equipo_local_id ||
+          p.equipo_visitante_id === par.equipo_local_id ||
+          p.equipo_local_id === par.equipo_visitante_id ||
+          p.equipo_visitante_id === par.equipo_visitante_id
+        )
+      ).length;
+      return carga(a) - carga(b) || a.localeCompare(b);
+    });
+
     // Iterar dias habilitados
-    for (const fecha of dias_ordenados) {
+    for (const fecha of dias_para_par) {
       if (asignado) break;
 
       // Actualizar contador de partidos del dia para ambos equipos

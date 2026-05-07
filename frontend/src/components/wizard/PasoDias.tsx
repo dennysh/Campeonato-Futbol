@@ -38,7 +38,8 @@ function calcularDiasNecesarios(
 ): number {
   const total = categorias.reduce((s, c) => s + (c.num_equipos * (c.num_equipos - 1)) / 2, 0);
   const porDia = numCanchas * Math.max(slotsEntre(horaI, horaF), 1);
-  return Math.ceil(total / porDia);
+  // +25% buffer para que el engine tenga holgura frente a restricciones de descanso/max_por_dia
+  return Math.ceil((total * 1.25) / porDia);
 }
 
 function tieneCusto(dia: DiaHabilitado) {
@@ -90,13 +91,15 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
   );
 
   // After changing per-day hours, append more S/D days until capacity covers all matches
+  // Uses 1.25× buffer so the engine has slack to resolve scheduling constraints
   function completarDiasHastaCapacidad(dias: DiaHabilitado[]): DiaHabilitado[] {
     if (totalPartidos === 0) return dias;
+    const target = Math.ceil(totalPartidos * 1.25);
     const result = [...dias];
     const fechasUsadas = new Set(result.map((d) => d.fecha));
     const cap = () => result.reduce((s, d) => s + capacidadDia(d), 0);
     for (const f of dias_base) {
-      if (cap() >= totalPartidos) break;
+      if (cap() >= target) break;
       if (esFds(f) && !fechasUsadas.has(f)) {
         result.push({ fecha: f });
         fechasUsadas.add(f);
