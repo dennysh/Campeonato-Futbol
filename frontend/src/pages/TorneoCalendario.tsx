@@ -177,7 +177,9 @@ function VistaTabla({
 }
 
 // ─── Vista programa: todos los días → columnas por cancha ────────────────────
-function VistaProgramaDias({ matches, cats }: { matches: Match[]; cats: string[] }) {
+function VistaProgramaDias({
+  matches, cats, torneoNombre,
+}: { matches: Match[]; cats: string[]; torneoNombre: string }) {
   const dias = [...new Set(matches.map((m) => m.fecha))].sort();
 
   if (dias.length === 0) {
@@ -186,6 +188,19 @@ function VistaProgramaDias({ matches, cats }: { matches: Match[]; cats: string[]
 
   return (
     <div style={{ padding: '1.25rem' }}>
+      {/* Cabecera visible solo en impresión */}
+      <div className="print-header" style={{ display: 'none' }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18 }}>{torneoNombre}</div>
+          <div style={{ fontSize: 12, color: '#6b7280' }}>
+            {dias[0]} — {dias[dias.length - 1]} · {matches.length} partidos · {cats.length} categorías
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: '#9ca3af' }}>
+          Generado {new Date().toLocaleDateString('es')}
+        </div>
+      </div>
+
       {dias.map((dia) => {
         const matchesDia = matches.filter((m) => m.fecha === dia);
         const canchasDelDia = [
@@ -197,7 +212,7 @@ function VistaProgramaDias({ matches, cats }: { matches: Match[]; cats: string[]
         ];
 
         return (
-          <div key={dia} style={{ marginBottom: '2.5rem' }}>
+          <div key={dia} className="print-dia" style={{ marginBottom: '2.5rem' }}>
             {/* Cabecera del día */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.75rem',
@@ -227,7 +242,8 @@ function VistaProgramaDias({ matches, cats }: { matches: Match[]; cats: string[]
                     .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
 
                   return (
-                    <div key={cancha.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                    <div key={cancha.id} className="print-cancha-card"
+                      style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
                       {/* Header cancha */}
                       <div style={{
                         background: '#1e3a8a', color: '#fff',
@@ -411,6 +427,14 @@ export default function TorneoCalendario() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {vista === 'programa' && (
+            <button onClick={() => window.print()} style={{
+              background: '#1e3a8a', color: '#fff', padding: '0.5rem 1.25rem',
+              border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600, fontSize: 14,
+            }}>
+              Descargar PDF
+            </button>
+          )}
           {torneo.status === 'publicado' && (
             <button onClick={handleCopiarEnlace} style={{
               background: copiado ? '#f0fdf4' : '#f3f4f6', color: copiado ? '#16a34a' : '#374151',
@@ -487,7 +511,9 @@ export default function TorneoCalendario() {
               setMatchDetalle={setMatchDetalle}
             />
           ) : vista === 'programa' ? (
-            <VistaProgramaDias matches={matches} cats={cats} />
+            <div id="programa-print-wrapper">
+              <VistaProgramaDias matches={matches} cats={cats} torneoNombre={torneo.nombre} />
+            </div>
           ) : (
             <FullCalendar
               plugins={[timeGridPlugin, interactionPlugin]}

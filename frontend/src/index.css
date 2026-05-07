@@ -27,3 +27,47 @@ input, select, button {
   font-family: inherit;
   font-size: 14px;
 }
+
+/* ── Print / PDF ──────────────────────────────────────────────── */
+@media print {
+  /* Ocultar todo excepto el programa */
+  body > #root > * { display: none !important; }
+  #programa-print-wrapper { display: block !important; }
+
+  /* Reset de página */
+  @page {
+    size: A4 landscape;
+    margin: 1.5cm 1.2cm;
+  }
+
+  body {
+    font-size: 11px;
+    background: #fff;
+  }
+
+  /* Cabecera del torneo en la impresión */
+  .print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 2px solid #1e3a8a;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* No cortar un día entre páginas */
+  .print-dia {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 1.5rem;
+  }
+
+  /* No cortar una card de cancha */
+  .print-cancha-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ocultar botones e íconos decorativos */
+  button, a[href], nav { display: none !important; }
+}
