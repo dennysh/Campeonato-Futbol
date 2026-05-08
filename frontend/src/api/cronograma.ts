@@ -57,8 +57,65 @@ export async function confirmarTorneo(payload: {
   fecha_inicio: string;
   categorias: unknown[];
   config_canchas: unknown;
-  dias_habilitados: string[];
+  config_horario: unknown;
+  dias_habilitados: unknown[];
 }): Promise<{ tournament_id: string; total_partidos: number; pendientes: number }> {
   const { data } = await api.post('/api/cronograma/confirmar', payload);
+  return data;
+}
+
+// ── Equipos ──────────────────────────────────────────────────────
+export async function getEquipos(torneoId: string) {
+  const { data } = await api.get(`/api/torneos/${torneoId}/equipos`);
+  return data;
+}
+
+export async function updateEquipo(torneoId: string, teamId: string, body: { nombre?: string; club_id?: string | null }) {
+  const { data } = await api.patch(`/api/torneos/${torneoId}/equipos/${teamId}`, body);
+  return data;
+}
+
+export async function getJugadores(torneoId: string, teamId: string) {
+  const { data } = await api.get(`/api/torneos/${torneoId}/equipos/${teamId}/jugadores`);
+  return data;
+}
+
+export async function crearJugador(torneoId: string, teamId: string, body: { nombre: string; numero?: number | null; posicion?: string }) {
+  const { data } = await api.post(`/api/torneos/${torneoId}/equipos/${teamId}/jugadores`, body);
+  return data;
+}
+
+export async function updateJugador(torneoId: string, teamId: string, playerId: string, body: { nombre?: string; numero?: number | null; posicion?: string }) {
+  const { data } = await api.patch(`/api/torneos/${torneoId}/equipos/${teamId}/jugadores/${playerId}`, body);
+  return data;
+}
+
+export async function eliminarJugador(torneoId: string, teamId: string, playerId: string) {
+  await api.delete(`/api/torneos/${torneoId}/equipos/${teamId}/jugadores/${playerId}`);
+}
+
+// ── Stats de partido ─────────────────────────────────────────────
+export async function getMatchStats(torneoId: string, matchId: string) {
+  const { data } = await api.get(`/api/torneos/${torneoId}/partidos/${matchId}/stats`);
+  return data;
+}
+
+export async function saveMatchStats(torneoId: string, matchId: string, body: {
+  home_score: number | null;
+  away_score: number | null;
+  stats: { player_id: string; goles: number; asistencias: number; amarillas: number; rojas: number; faltas: number }[];
+}) {
+  const { data } = await api.put(`/api/torneos/${torneoId}/partidos/${matchId}/stats`, body);
+  return data;
+}
+
+// ── Clubes ───────────────────────────────────────────────────────
+export async function getClubes() {
+  const { data } = await api.get('/api/clubes');
+  return data;
+}
+
+export async function crearClub(body: { nombre: string; ciudad?: string }) {
+  const { data } = await api.post('/api/clubes', body);
   return data;
 }

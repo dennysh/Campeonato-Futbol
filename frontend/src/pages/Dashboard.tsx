@@ -82,13 +82,22 @@ export default function Dashboard() {
                   Inicio: {t.fecha_inicio} &nbsp;·&nbsp; {t._count.categories} categorias &nbsp;·&nbsp; {partidos} partidos
                 </div>
               </div>
-              <Link to={`/torneos/${t.id}`} style={{
-                background: '#f3f4f6', color: '#374151', padding: '0.4rem 1rem',
-                borderRadius: 6, textDecoration: 'none', fontWeight: 500, fontSize: 14,
-                whiteSpace: 'nowrap',
-              }}>
-                Ver calendario
-              </Link>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                <Link to={`/torneos/${t.id}/equipos`} style={{
+                  background: '#eff6ff', color: '#2563eb', padding: '0.4rem 1rem',
+                  borderRadius: 6, textDecoration: 'none', fontWeight: 500, fontSize: 14,
+                  whiteSpace: 'nowrap',
+                }}>
+                  👥 Equipos
+                </Link>
+                <Link to={`/torneos/${t.id}`} style={{
+                  background: '#f3f4f6', color: '#374151', padding: '0.4rem 1rem',
+                  borderRadius: 6, textDecoration: 'none', fontWeight: 500, fontSize: 14,
+                  whiteSpace: 'nowrap',
+                }}>
+                  Ver calendario
+                </Link>
+              </div>
             </div>
           );
         })}

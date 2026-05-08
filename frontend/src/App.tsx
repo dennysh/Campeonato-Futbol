@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react
 import NuevoTorneo from './pages/NuevoTorneo';
 import Dashboard from './pages/Dashboard';
 import TorneoCalendario from './pages/TorneoCalendario';
+import TorneoEquipos from './pages/TorneoEquipos';
+import EquipoDetalle from './pages/EquipoDetalle';
 import TorneoPublico from './pages/TorneoPublico';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
@@ -46,6 +48,8 @@ export default function App() {
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/torneos/nuevo" element={<ProtectedRoute><NuevoTorneo /></ProtectedRoute>} />
         <Route path="/torneos/:id" element={<ProtectedRoute><TorneoCalendario /></ProtectedRoute>} />
+        <Route path="/torneos/:id/equipos" element={<ProtectedRoute><TorneoEquipos /></ProtectedRoute>} />
+        <Route path="/torneos/:id/equipos/:teamId" element={<ProtectedRoute><EquipoDetalle /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

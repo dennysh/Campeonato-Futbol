@@ -4,7 +4,7 @@ import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventDropArg } from '@fullcalendar/interaction';
-import { getTorneo, moverPartido, publicarTorneo } from '../api/cronograma';
+import { getTorneo, moverPartido, publicarTorneo, getMatchStats, saveMatchStats } from '../api/cronograma';
 
 interface Match {
   id: string;
@@ -12,9 +12,171 @@ interface Match {
   hora_inicio: string;
   hora_fin: string;
   field_id: string;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
   home_team: { id: string; nombre: string; category: { nombre: string } };
   away_team: { id: string; nombre: string; category: { nombre: string } };
   field: { id: string; nombre: string };
+}
+
+interface Player { id: string; nombre: string; numero: number | null; posicion: string | null }
+interface StatRow { player_id: string; goles: number; asistencias: number; amarillas: number; rojas: number; faltas: number }
+
+// ─── Modal de estadísticas ───────────────────────────────────────────────────
+function StatsModal({
+  torneoId, match, cats, onClose, onSaved,
+}: {
+  torneoId: string; match: Match; cats: string[];
+  onClose: () => void; onSaved: (updated: Partial<Match>) => void;
+}) {
+  const color = colorPorCategoria(match.home_team.category.nombre, cats);
+  const [homeScore, setHomeScore] = useState<string>(match.home_score?.toString() ?? '');
+  const [awayScore, setAwayScore] = useState<string>(match.away_score?.toString() ?? '');
+  const [homePlayers, setHomePlayers] = useState<Player[]>([]);
+  const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
+  const [stats, setStats] = useState<Record<string, StatRow>>({});
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    getMatchStats(torneoId, match.id).then((data: {
+      home_team: { players: Player[] }; away_team: { players: Player[] };
+      player_stats: StatRow[];
+    }) => {
+      setHomePlayers(data.home_team.players);
+      setAwayPlayers(data.away_team.players);
+      const map: Record<string, StatRow> = {};
+      for (const s of data.player_stats) map[s.player_id] = s;
+      setStats(map);
+    }).finally(() => setCargando(false));
+  }, [torneoId, match.id]);
+
+  function getStat(playerId: string): StatRow {
+    return stats[playerId] ?? { player_id: playerId, goles: 0, asistencias: 0, amarillas: 0, rojas: 0, faltas: 0 };
+  }
+
+  function setStat(playerId: string, field: keyof Omit<StatRow, 'player_id'>, value: number) {
+    setStats(prev => ({
+      ...prev,
+      [playerId]: { ...getStat(playerId), [field]: value },
+    }));
+  }
+
+  async function handleGuardar() {
+    setGuardando(true);
+    try {
+      await saveMatchStats(torneoId, match.id, {
+        home_score: homeScore !== '' ? Number(homeScore) : null,
+        away_score: awayScore !== '' ? Number(awayScore) : null,
+        stats: Object.values(stats),
+      });
+      onSaved({
+        home_score: homeScore !== '' ? Number(homeScore) : null,
+        away_score: awayScore !== '' ? Number(awayScore) : null,
+        status: 'jugado',
+      });
+      onClose();
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function PlayerRow({ player }: { player: Player }) {
+    const s = getStat(player.id);
+    return (
+      <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+        <td style={{ padding: '0.5rem 0.5rem', fontSize: 13 }}>
+          <span style={{ color: '#9ca3af', marginRight: 6, fontWeight: 600 }}>{player.numero ?? '—'}</span>
+          {player.nombre}
+        </td>
+        {(['goles','asistencias','amarillas','rojas'] as const).map(field => (
+          <td key={field} style={{ padding: '0.3rem', textAlign: 'center' }}>
+            <input
+              type="number" min={0} max={99}
+              value={s[field]}
+              onChange={e => setStat(player.id, field, Math.max(0, Number(e.target.value)))}
+              style={{ width: 46, textAlign: 'center', padding: '0.25rem', borderRadius: 5, border: '1px solid #d1d5db', fontSize: 13 }}
+            />
+          </td>
+        ))}
+      </tr>
+    );
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1rem' }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 680, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        {/* Header */}
+        <div style={{ background: color, color: '#fff', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '12px 12px 0 0' }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{match.home_team.nombre} vs {match.away_team.nombre}</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>{match.home_team.category.nombre} · {match.fecha} · {match.hora_inicio} · {match.field.nombre}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 20, padding: '0.1rem 0.5rem', lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: '1.25rem' }}>
+          {/* Marcador */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', background: '#f9fafb', borderRadius: 10, padding: '1rem' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{match.home_team.nombre}</div>
+              <input type="number" min={0} max={99} value={homeScore}
+                onChange={e => setHomeScore(e.target.value)}
+                style={{ width: 64, textAlign: 'center', fontSize: 28, fontWeight: 800, border: '2px solid #d1d5db', borderRadius: 8, padding: '0.25rem' }} />
+            </div>
+            <span style={{ fontSize: 24, color: '#9ca3af', fontWeight: 700 }}>—</span>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{match.away_team.nombre}</div>
+              <input type="number" min={0} max={99} value={awayScore}
+                onChange={e => setAwayScore(e.target.value)}
+                style={{ width: 64, textAlign: 'center', fontSize: 28, fontWeight: 800, border: '2px solid #d1d5db', borderRadius: 8, padding: '0.25rem' }} />
+            </div>
+          </div>
+
+          {cargando ? (
+            <div style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>Cargando jugadores...</div>
+          ) : (
+            <>
+              {/* Tabla de stats por equipo */}
+              {[
+                { label: match.home_team.nombre, players: homePlayers },
+                { label: match.away_team.nombre, players: awayPlayers },
+              ].map(({ label, players }) => (
+                <div key={label} style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, paddingBottom: 4, borderBottom: '2px solid #e5e7eb' }}>{label}</div>
+                  {players.length === 0 ? (
+                    <div style={{ color: '#9ca3af', fontSize: 13, padding: '0.5rem 0' }}>Sin jugadores registrados</div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f9fafb' }}>
+                          <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', color: '#6b7280', fontWeight: 600 }}>Jugador</th>
+                          {['⚽','🎯','🟨','🟥'].map((icon, i) => (
+                            <th key={i} style={{ padding: '0.4rem', textAlign: 'center', color: '#6b7280', fontWeight: 600, width: 50 }} title={['Goles','Asistencias','Amarillas','Rojas'][i]}>{icon}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {players.map(p => <PlayerRow key={p.id} player={p} />)}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '0.6rem 1.25rem', border: '1px solid #d1d5db', borderRadius: 7, background: '#fff', cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
+            <button onClick={handleGuardar} disabled={guardando} style={{ padding: '0.6rem 1.5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
+              {guardando ? 'Guardando...' : 'Guardar resultado'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface Torneo {
@@ -472,6 +634,7 @@ export default function TorneoCalendario() {
   const [confirmarConflicto, setConfirmarConflicto] = useState<{
     arg: EventDropArg; conflictos: string[];
   } | null>(null);
+  const [statsMatch, setStatsMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -573,7 +736,10 @@ export default function TorneoCalendario() {
       {/* Cabecera */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
         <div>
-          <Link to="/" style={{ color: '#6b7280', fontSize: 13, textDecoration: 'none' }}>← Mis torneos</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Link to="/" style={{ color: '#6b7280', fontSize: 13, textDecoration: 'none' }}>← Mis torneos</Link>
+            <Link to={`/torneos/${id}/equipos`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none', fontWeight: 600 }}>👥 Equipos</Link>
+          </div>
           <h1 style={{ margin: '0.25rem 0 0', fontSize: 22 }}>{torneo.nombre}</h1>
           <p style={{ color: '#6b7280', fontSize: 13, margin: '0.25rem 0 0' }}>
             {matches.length} partidos · {cats.length} categorias · {dias.length} jornadas
@@ -734,6 +900,19 @@ export default function TorneoCalendario() {
                 <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: 160 }}>{value}</span>
               </div>
             ))}
+            {matchDetalle.home_score != null && matchDetalle.away_score != null && (
+              <div style={{ textAlign: 'center', margin: '0.75rem 0', padding: '0.5rem', background: '#f9fafb', borderRadius: 8 }}>
+                <span style={{ fontWeight: 800, fontSize: 22 }}>{matchDetalle.home_score}</span>
+                <span style={{ color: '#9ca3af', margin: '0 0.5rem', fontSize: 16 }}>–</span>
+                <span style={{ fontWeight: 800, fontSize: 22 }}>{matchDetalle.away_score}</span>
+              </div>
+            )}
+            <button
+              onClick={() => setStatsMatch(matchDetalle)}
+              style={{ width: '100%', marginTop: '0.75rem', padding: '0.55rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+            >
+              {matchDetalle.status === 'jugado' ? '✏️ Editar resultado' : '⚽ Registrar resultado'}
+            </button>
           </div>
         )}
       </div>
@@ -742,6 +921,29 @@ export default function TorneoCalendario() {
         <p style={{ fontSize: 12, color: '#9ca3af', marginTop: '0.75rem', textAlign: 'center' }}>
           Arrastra los partidos para cambiar su horario.
         </p>
+      )}
+
+      {/* Modal de stats */}
+      {statsMatch && id && (
+        <StatsModal
+          torneoId={id}
+          match={statsMatch}
+          cats={cats}
+          onClose={() => setStatsMatch(null)}
+          onSaved={(updated) => {
+            setTorneo(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                schedule_versions: prev.schedule_versions.map(sv => ({
+                  ...sv,
+                  matches: sv.matches.map(m => m.id === statsMatch.id ? { ...m, ...updated } : m),
+                })),
+              };
+            });
+            setMatchDetalle(prev => prev?.id === statsMatch.id ? { ...prev, ...updated } : prev);
+          }}
+        />
       )}
 
       {/* Modal de conflicto */}
