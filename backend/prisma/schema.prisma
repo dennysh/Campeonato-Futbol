@@ -1,11 +1,17 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
+
+// ─────────────────────────────────────────────
+//  AUTH
+// ─────────────────────────────────────────────
 
 model User {
   id            String   @id @default(uuid())
@@ -16,7 +22,28 @@ model User {
   created_at    DateTime @default(now())
 
   tournaments Tournament[]
+  clubs       Club[]
 }
+
+// ─────────────────────────────────────────────
+//  CLUBES  (persisten entre torneos)
+// ─────────────────────────────────────────────
+
+model Club {
+  id             String   @id @default(uuid())
+  organizador_id String?
+  nombre         String
+  ciudad         String?
+  logo_url       String?
+  created_at     DateTime @default(now())
+
+  organizador User?  @relation(fields: [organizador_id], references: [id])
+  teams       Team[]
+}
+
+// ─────────────────────────────────────────────
+//  TORNEO
+// ─────────────────────────────────────────────
 
 model Tournament {
   id             String   @id @default(uuid())
@@ -35,27 +62,79 @@ model Tournament {
   schedule_versions ScheduleVersion[]
 }
 
+// ─────────────────────────────────────────────
+//  CATEGORÍAS
+// ─────────────────────────────────────────────
+
 model Category {
-  id            String     @id @default(uuid())
+  id            String  @id @default(uuid())
   tournament_id String
   nombre        String
   sub           Int
   genero        String
-  modalidad     String     @default("futbol")
+  modalidad     String  @default("futbol")
+  color         String? // color hex para el calendario
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   teams      Team[]
 }
 
-model Team {
-  id          String @id @default(uuid())
-  category_id String
-  nombre      String
+// ─────────────────────────────────────────────
+//  EQUIPOS
+// ─────────────────────────────────────────────
 
-  category         Category        @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  home_matches     Match[]         @relation("HomeTeam")
-  away_matches     Match[]         @relation("AwayTeam")
+model Team {
+  id          String  @id @default(uuid())
+  category_id String
+  club_id     String? // referencia opcional al club
+  nombre      String  // nombre real (reemplaza "Equipo 1")
+
+  category     Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  club         Club?    @relation(fields: [club_id], references: [id], onDelete: SetNull)
+  home_matches Match[]  @relation("HomeTeam")
+  away_matches Match[]  @relation("AwayTeam")
+  players      Player[]
 }
+
+// ─────────────────────────────────────────────
+//  JUGADORES
+// ─────────────────────────────────────────────
+
+model Player {
+  id         String   @id @default(uuid())
+  team_id    String
+  nombre     String
+  numero     Int?     // número de camiseta
+  posicion   String?  // portero | defensa | mediocampista | delantero
+  created_at DateTime @default(now())
+
+  team        Team              @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  match_stats PlayerMatchStat[]
+}
+
+// ─────────────────────────────────────────────
+//  ESTADÍSTICAS POR PARTIDO
+// ─────────────────────────────────────────────
+
+model PlayerMatchStat {
+  id          String @id @default(uuid())
+  player_id   String
+  match_id    String
+  goles       Int    @default(0)
+  asistencias Int    @default(0)
+  amarillas   Int    @default(0)
+  rojas       Int    @default(0)
+  faltas      Int    @default(0)
+
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+  match  Match  @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@unique([player_id, match_id])
+}
+
+// ─────────────────────────────────────────────
+//  CANCHAS
+// ─────────────────────────────────────────────
 
 model Field {
   id            String @id @default(uuid())
@@ -66,8 +145,12 @@ model Field {
   matches    Match[]
 }
 
+// ─────────────────────────────────────────────
+//  DÍAS DEL TORNEO
+// ─────────────────────────────────────────────
+
 model TournamentDay {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   tournament_id String
   fecha         String
 
@@ -75,6 +158,10 @@ model TournamentDay {
 
   @@unique([tournament_id, fecha])
 }
+
+// ─────────────────────────────────────────────
+//  VERSIONES DE CRONOGRAMA
+// ─────────────────────────────────────────────
 
 model ScheduleVersion {
   id            String   @id @default(uuid())
@@ -86,6 +173,10 @@ model ScheduleVersion {
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   matches    Match[]
 }
+
+// ─────────────────────────────────────────────
+//  PARTIDOS
+// ─────────────────────────────────────────────
 
 model Match {
   id                  String @id @default(uuid())
@@ -101,8 +192,9 @@ model Match {
   home_score          Int?
   away_score          Int?
 
-  schedule_version ScheduleVersion @relation(fields: [schedule_version_id], references: [id], onDelete: Cascade)
-  field            Field           @relation(fields: [field_id], references: [id])
-  home_team        Team            @relation("HomeTeam", fields: [home_team_id], references: [id])
-  away_team        Team            @relation("AwayTeam", fields: [away_team_id], references: [id])
+  schedule_version ScheduleVersion  @relation(fields: [schedule_version_id], references: [id], onDelete: Cascade)
+  field            Field            @relation(fields: [field_id], references: [id])
+  home_team        Team             @relation("HomeTeam", fields: [home_team_id], references: [id])
+  away_team        Team             @relation("AwayTeam", fields: [away_team_id], references: [id])
+  player_stats     PlayerMatchStat[]
 }

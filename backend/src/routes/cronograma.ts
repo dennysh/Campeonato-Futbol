@@ -19,15 +19,15 @@ router.post('/preview', (req: Request, res: Response) => {
 
 // POST /api/cronograma/confirmar — guarda todo en DB en una transaccion
 router.post('/confirmar', requireAuth, async (req: AuthRequest, res: Response) => {
-  const { nombre, fecha_inicio, categorias, config_canchas, dias_habilitados } = req.body;
+  const { nombre, fecha_inicio, categorias, config_canchas, config_horario, dias_habilitados } = req.body;
 
-  if (!nombre || !fecha_inicio || !categorias?.length || !config_canchas || !dias_habilitados?.length) {
+  if (!nombre || !fecha_inicio || !categorias?.length || !config_canchas || !config_horario || !dias_habilitados?.length) {
     res.status(400).json({ error: 'Datos incompletos para confirmar el torneo' });
     return;
   }
 
   try {
-    const result = await confirmarTorneo({ nombre, fecha_inicio, categorias, config_canchas, dias_habilitados, organizador_id: req.userId });
+    const result = await confirmarTorneo({ nombre, fecha_inicio, categorias, config_canchas, config_horario, dias_habilitados, organizador_id: req.userId });
     res.status(201).json(result);
   } catch (err) {
     console.error('Error al confirmar torneo:', err);
