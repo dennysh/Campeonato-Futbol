@@ -30,8 +30,9 @@ router.post('/confirmar', requireAuth, async (req: AuthRequest, res: Response) =
     const result = await confirmarTorneo({ nombre, fecha_inicio, categorias, config_canchas, config_horario, dias_habilitados, organizador_id: req.userId });
     res.status(201).json(result);
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error('Error al confirmar torneo:', err);
-    res.status(500).json({ error: 'Error interno al guardar el torneo' });
+    res.status(500).json({ error: msg });
   }
 });
 

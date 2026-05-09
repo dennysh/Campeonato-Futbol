@@ -19,8 +19,11 @@ function Nav() {
       <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 18 }}>
         Futbol Formativo
       </Link>
+      <Link to="/" style={{ color: '#93c5fd', textDecoration: 'none', fontSize: 14 }}>
+        Mis torneos
+      </Link>
       <Link to="/torneos/nuevo" style={{ color: '#93c5fd', textDecoration: 'none', fontSize: 14 }}>
-        Nuevo torneo
+        + Nuevo torneo
       </Link>
       {user && (
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>

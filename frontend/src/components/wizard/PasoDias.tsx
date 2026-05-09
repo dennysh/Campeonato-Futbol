@@ -249,23 +249,52 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
           </div>
 
           {/* ── Contador ── */}
-          <div style={{
-            background: suficiente ? '#f0fdf4' : '#fefce8',
-            border: `1px solid ${suficiente ? '#bbf7d0' : '#fde68a'}`,
-            borderRadius: 8, padding: '0.6rem 1rem', marginBottom: '1rem',
-            display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center',
-          }}>
-            <div>
-              <span style={{ fontSize: 22, fontWeight: 700, color: suficiente ? '#16a34a' : '#92400e' }}>{dias_habilitados.length}</span>
-              <span style={{ fontSize: 13, color: '#6b7280', marginLeft: 4 }}>días seleccionados</span>
-            </div>
-            <div style={{ fontSize: 13, color: '#6b7280' }}>S/D: <strong>{diasFds}</strong> · Extras: <strong>{diasExtra}</strong></div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: suficiente ? '#15803d' : '#92400e' }}>
-              {suficiente
-                ? `Suficiente — ${capacidadActualTotal} slots / ${totalPartidos} partidos`
-                : `Insuficiente — ${capacidadActualTotal} / ${totalPartidos} slots (faltan días)`}
-            </div>
-          </div>
+          {(() => {
+            const sobrante = capacidadActualTotal - totalPartidos;
+            const canchasActivas = config_canchas.canchas.filter(c => c.categorias_ids.length > 0).length || 1;
+            const horasSobrantes = Math.floor(sobrante / canchasActivas);
+            return (
+              <div style={{
+                background: suficiente ? '#f0fdf4' : '#fefce8',
+                border: `1px solid ${suficiente ? '#bbf7d0' : '#fde68a'}`,
+                borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem',
+              }}>
+                {/* Fila 1: métricas principales */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center', marginBottom: suficiente ? '0.6rem' : 0 }}>
+                  <div>
+                    <span style={{ fontSize: 22, fontWeight: 700, color: suficiente ? '#16a34a' : '#92400e' }}>{dias_habilitados.length}</span>
+                    <span style={{ fontSize: 13, color: '#6b7280', marginLeft: 4 }}>días</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>
+                    S/D: <strong>{diasFds}</strong> · Extras: <strong>{diasExtra}</strong>
+                  </div>
+                  <div style={{ fontSize: 13 }}>
+                    <span style={{ color: '#6b7280' }}>Capacidad: </span>
+                    <strong style={{ color: suficiente ? '#15803d' : '#92400e' }}>{capacidadActualTotal}</strong>
+                    <span style={{ color: '#9ca3af' }}> / {totalPartidos} partidos</span>
+                  </div>
+                  {suficiente && (
+                    <div style={{ fontSize: 13 }}>
+                      <span style={{ color: '#6b7280' }}>Sobrante: </span>
+                      <strong style={{ color: '#2563eb' }}>{sobrante} slots</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fila 2: consejo sobre el último día */}
+                {suficiente && sobrante > 0 && (
+                  <div style={{
+                    background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6,
+                    padding: '0.5rem 0.75rem', fontSize: 13, color: '#1d4ed8',
+                  }}>
+                    💡 Sobran <strong>{sobrante} slots</strong> — el último día podría terminar
+                    aproximadamente <strong>{horasSobrantes}h antes</strong> ({canchasActivas} canchas × {horasSobrantes}h).
+                    Usa ⚙ para ajustar su horario de fin.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Acciones ── */}
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
@@ -273,6 +302,17 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
               padding: '0.4rem 1rem', borderRadius: 6, border: '1px solid #d1d5db',
               background: '#f9fafb', cursor: 'pointer', fontSize: 13, fontWeight: 500,
             }}>Restablecer S/D automáticos</button>
+            {diaEditando && (
+              <button onClick={() => {
+                toggleDia(diaEditando);
+                setDiaEditando(null);
+              }} style={{
+                padding: '0.4rem 1rem', borderRadius: 6, border: '1px solid #fed7aa',
+                background: '#fff7ed', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#c2410c',
+              }}>
+                🗑 Liberar día ({new Date(diaEditando + 'T12:00:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })})
+              </button>
+            )}
             <button onClick={() => { setDiasHabilitados([]); setDiaEditando(null); }} style={{
               padding: '0.4rem 1rem', borderRadius: 6, border: '1px solid #fecaca',
               background: '#fef2f2', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#dc2626',
@@ -405,13 +445,15 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
                   return (
                     <button
                       key={fecha}
-                      onClick={() => seleccionado ? (editando ? setDiaEditando(null) : setDiaEditando(fecha)) : toggleDia(fecha)}
-                      onDoubleClick={() => seleccionado ? toggleDia(fecha) : undefined}
-                      title={seleccionado ? 'Click: configurar · Doble click: quitar' : 'Click: agregar'}
+                      onClick={() => seleccionado
+                        ? setDiaEditando(editando ? null : fecha)
+                        : toggleDia(fecha)
+                      }
+                      title={seleccionado ? 'Click para configurar horario' : 'Click para agregar'}
                       style={{
-                        padding: '5px 2px', borderRadius: 6, cursor: 'pointer', textAlign: 'center',
+                        width: '100%', padding: '5px 2px', borderRadius: 6, cursor: 'pointer', textAlign: 'center',
                         border: editando ? '2px solid #1d4ed8' : seleccionado ? '2px solid #2563eb' : '1px solid #e5e7eb',
-                        background: seleccionado ? (editando ? '#1d4ed8' : '#2563eb') : fds ? '#f0fdf4' : '#fff',
+                        background: seleccionado ? (editando ? '#1d4ed8' : tieneConfig ? '#1d4ed8' : '#2563eb') : fds ? '#f0fdf4' : '#fff',
                         color: seleccionado ? '#fff' : fds ? '#16a34a' : '#374151',
                         fontWeight: seleccionado ? 700 : 400, fontSize: 12, lineHeight: 1.3,
                         position: 'relative',
@@ -420,7 +462,7 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
                       <div>{d.getDate()}</div>
                       <div style={{ fontSize: 9 }}>{d.toLocaleString('es', { month: 'short' })}</div>
                       {tieneConfig && (
-                        <div style={{ position: 'absolute', top: 1, right: 2, fontSize: 8 }}>✏</div>
+                        <div style={{ position: 'absolute', bottom: 1, right: 2, fontSize: 8, opacity: 0.8 }}>⚙</div>
                       )}
                     </button>
                   );
@@ -430,9 +472,20 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
           </div>
 
           <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: '1.5rem' }}>
-            Click en un día marcado para configurar horas por cancha · Doble click para quitar el día
+            Click en día marcado → configura sus horarios · Click en día libre → lo agrega · "Liberar día" → lo quita y asigna el siguiente
           </p>
         </>
+      )}
+
+      {!suficiente && dias_habilitados.length > 0 && (
+        <div style={{
+          background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8,
+          padding: '0.65rem 1rem', marginBottom: '1rem', fontSize: 14, color: '#92400e',
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+        }}>
+          ⚠️ <strong>Faltan días:</strong> tienes {capacidadActualTotal} slots pero necesitas {totalPartidos} partidos.
+          Agrega más días o usa el botón "Restablecer S/D automáticos".
+        </div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -441,12 +494,12 @@ export default function PasoDias({ onSiguiente, onAtras }: Props) {
           border: '1px solid #d1d5db', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 15,
         }}>Atras</button>
         <button
-          onClick={() => dias_habilitados.length > 0 ? onSiguiente() : undefined}
-          disabled={dias_habilitados.length === 0}
+          onClick={() => (dias_habilitados.length > 0 && suficiente) ? onSiguiente() : undefined}
+          disabled={dias_habilitados.length === 0 || !suficiente}
           style={{
-            background: dias_habilitados.length > 0 ? '#2563eb' : '#9ca3af',
+            background: (dias_habilitados.length > 0 && suficiente) ? '#2563eb' : '#9ca3af',
             color: '#fff', padding: '0.6rem 2rem', border: 'none', borderRadius: 8,
-            cursor: dias_habilitados.length > 0 ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: 15,
+            cursor: (dias_habilitados.length > 0 && suficiente) ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: 15,
           }}
         >Siguiente</button>
       </div>

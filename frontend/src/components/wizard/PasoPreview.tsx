@@ -41,8 +41,12 @@ export default function PasoPreview({ onAtras }: Props) {
       });
       setGuardado(result);
       resetWizard();
-    } catch {
-      setErrorGuardar('Error al guardar. Verifica que el backend este corriendo.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string }; status?: number } })?.response?.data?.error
+        ?? (err as { response?: { status?: number } })?.response?.status?.toString()
+        ?? (err as Error)?.message
+        ?? 'Error desconocido';
+      setErrorGuardar(`Error al guardar: ${msg}`);
     } finally {
       setGuardando(false);
     }
